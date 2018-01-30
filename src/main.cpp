@@ -24,7 +24,7 @@ std::string hasData(std::string s) {
     return s.substr(b1, b2 - b1 + 1);
   }
   return "";
-}
+  }
 
 int main()
 {
@@ -90,6 +90,7 @@ int main()
           		iss >> timestamp;
           		meas_package.timestamp_ = timestamp;
           }
+
           float x_gt;
     	  float y_gt;
     	  float vx_gt;
@@ -112,9 +113,11 @@ int main()
 
     	  VectorXd estimate(4);
 
+    	  std::cout << ukf.x_ << std::endl ;
+
     	  double p_x = ukf.x_(0);
     	  double p_y = ukf.x_(1);
-    	  double v  = ukf.x_(2);
+    	  double v   = ukf.x_(2);
     	  double yaw = ukf.x_(3);
 
     	  double v1 = cos(yaw)*v;
@@ -122,8 +125,8 @@ int main()
 
     	  estimate(0) = p_x;
     	  estimate(1) = p_y;
-    	  estimate(2) = v1;
-    	  estimate(3) = v2;
+    	  estimate(2) = v1 ;
+    	  estimate(3) = v2 ;
 
     	  estimations.push_back(estimate);
 
