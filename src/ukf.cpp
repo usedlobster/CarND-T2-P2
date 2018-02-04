@@ -111,50 +111,50 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
         x_.fill( 0.0 ) ;
 
 
-        if ( use_radar_ &&  meas_package.sensor_type_ == MeasurementPackage::RADAR ) {
-            // get radar measurements
-            double rho   = meas_package.raw_measurements_(0) ;
-            double phi   = meas_package.raw_measurements_(1) ;
-            x_ << rho*cos(phi), rho*sin(phi), 0.5, 0.5, 0.5 ;
+		if (  meas_package.sensor_type_ == MeasurementPackage::RADAR ) {
+			// get radar measurements
+			double rho   = meas_package.raw_measurements_(0) ;
+			double phi   = meas_package.raw_measurements_(1) ;
+			x_ << rho*cos(phi), rho*sin(phi), 0.5, 0.5, 0.5 ;
 
-        } else if ( use_laser_ &&  meas_package.sensor_type_ == MeasurementPackage::LASER ) {
+		} else if (  meas_package.sensor_type_ == MeasurementPackage::LASER ) {
 
-            double px   = meas_package.raw_measurements_(0) ;
-            double py   = meas_package.raw_measurements_(1) ;
-            // we can only know (px,py) from first measurement.
-            x_ << px, py, 0.5 , 0.5 , 0.5 ;
-        }
-        else
-           return ; // we wait until we get an update we can use .
-
-
-
-        std::cout << "[0]:" << x_.transpose() << std::endl ;
-        // save this time step .
-        time_us_ = meas_package.timestamp_ ;
-        is_initialized_ = true ;
-        return ;
-    }
+			double px   = meas_package.raw_measurements_(0) ;
+			double py   = meas_package.raw_measurements_(1) ;
+			// we can only know (px,py) from first measurement.
+			x_ << px, py, 0.5 , 0.5 , 0.5 ;
+		}
+		else
+		   return ; //  unknown measurement type
 
 
-    double dt = ( meas_package.timestamp_ - time_us_ ) / 1.0e6 ; // convert us -> fractional seconds
-    time_us_ = meas_package.timestamp_;
 
-    Prediction( dt ) ;
+		std::cout << "[0]:" << x_.transpose() << std::endl ;
+		// save this time step .
+		time_us_ = meas_package.timestamp_ ;
+		is_initialized_ = true ;
+		return ;
+	}
 
-    if ( use_radar_ && meas_package.sensor_type_ == MeasurementPackage::RADAR )
-        UpdateRadar( meas_package ) ;
-    /*
-    else if ( use_laser_ && meas_package.sensor_type_ == MeasurementPackage::LASER  )
-        UpdateLidar( meas_package ) ;
+
+	double dt = ( meas_package.timestamp_ - time_us_ ) / 1.0e6 ; // convert us -> fractional seconds
+	time_us_ = meas_package.timestamp_;
+
+	Prediction( dt ) ;
+
+	if ( use_radar_ && meas_package.sensor_type_ == MeasurementPackage::RADAR )
+		UpdateRadar( meas_package ) ;
+	/*
+	else if ( use_laser_ && meas_package.sensor_type_ == MeasurementPackage::LASER  )
+		UpdateLidar( meas_package ) ;
 */
 }
 
 
 static void  FIX_ANGLE( double &a ) {
 /*
-    while ( a > M_PI )
-        a -= M_PI*2.0 ;
+	while ( a > M_PI )
+		a -= M_PI*2.0 ;
 
     while ( a < -M_PI )
         a += M_PI*2.0 ;
@@ -235,7 +235,6 @@ void UKF::Prediction( double dt ) {
         p_py    += 0.5*nu_a*dt*dt*sin(yaw) ;
         p_v     += nu_a*dt ;
         p_yaw   += 0.5*nu_yaw_dd*dt*dt ;
-        FIX_ANGLE( p_yaw ) ;
         p_yaw_d += nu_yaw_dd*dt ;
 
 
@@ -251,10 +250,11 @@ void UKF::Prediction( double dt ) {
 
     x_.fill( 0.0 )   ;
     for ( int i = 0 ; i < n_aug_*2 + 1 ; i++  ) {
-        x_ = x_ + weights_(i) * Xsig_pred_.col(i) ;
+		x_ = x_ + weights_(i) * Xsig_pred_.col(i) ;
+        FIX_ANGLE( x_(3) ) ;
     }
 
-    FIX_ANGLE( x_(3) );
+   FIX_ANGLE( x_(3) );
 
     //predict state covariance matrix
     P_.fill( 0.0 ) ;
@@ -275,10 +275,75 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
     TODO:
     Complete this function! Use lidar data to update the belief about the object's
     position. Modify the state vector, x_, and covariance, P_.
-    You'll also need to calculate the lidar NIS.
-    **/
+	You'll also need to calculate the lidar NIS.
+	**/
+/*
+	MatrixXd Zsig = MatrixXd( 2 , 2 * n_aug_ + 1  )   ;
+
+	VectorXd z_pred = VectorXd( 2 ) ;
+	z_pred.fill( 0.0 ) ;
+
+	for ( int i=0; i< 2*n_aug_+1 ; i++ ) {
+		// convert to radar space using these 4
+		double px  = Xsig_pred_( 0, i ) ;
+		double py  = Xsig_pred_( 1, i ) ;
+		double v   = Xsig_pred_( 2, i ) ;
+		double yaw = Xsig_pred_( 3, i ) ;
+
+		//
+		double rho = sqrt( px*px + py*py);
+
+		Zsig( 0, i ) = rho              ;
+		Zsig( 1, i ) = atan2(py,px)     ;
+		Zsig( 2, i ) = ( px * cos(yaw) * v  + py * sin(yaw) * v ) / rho ;
+
+		z_pred += weights_(i) * Zsig.col(i) ;
+
+    }
 
 
+    MatrixXd S  = MatrixXd( 3 , 3 ) ;
+    S.fill(0.0) ;
+    MatrixXd Tc = MatrixXd( n_x_ , 3 ) ;
+    Tc.fill(0.0) ;
+
+
+    for ( int i=0; i<2*n_aug_+1; i++) {
+
+        VectorXd zd = Zsig.col(i) - z_pred  ;
+        FIX_ANGLE(zd(1)) ;
+
+        S =  S + weights_(i) * zd * zd.transpose() ;
+
+        VectorXd xd = Xsig_pred_.col(i) - x_ ;
+		FIX_ANGLE(xd(3)) ;
+
+        Tc = Tc + weights_(i) * xd * zd.transpose() ;
+
+    }
+
+    // we should put this in constructor - as constant
+
+    S = S + R_radar_ ;
+
+    // Kalman gain
+    MatrixXd K = Tc * S.inverse();
+
+    // get radar measurement
+    VectorXd z = VectorXd( 3 ) ;
+
+    z << meas_package.raw_measurements_[0] ,
+         meas_package.raw_measurements_[1] ,
+         meas_package.raw_measurements_[2] ;
+
+
+    VectorXd z_res = z - z_pred ;
+
+    FIX_ANGLE( z_res(1) ) ;
+
+    x_ = x_ +  K * z_res ;
+    P_ = P_ - K * S * K.transpose() ;
+  */
 
 
 }
@@ -289,7 +354,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
  */
 void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
-    MatrixXd Zsig = MatrixXd( 3 , 2 * n_aug_ + 1  )   ;
+	MatrixXd Zsig = MatrixXd( 3 , 2 * n_aug_ + 1  )   ;
 
     VectorXd z_pred = VectorXd( 3 ) ;
     z_pred.fill( 0.0 ) ;
