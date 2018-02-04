@@ -14,7 +14,7 @@ using std::vector;
 
 UKF::UKF() {
     // if this is false, laser measurements will be ignored (except during init)
-    use_laser_ = false ;
+    use_laser_ = true ;
 
     // if this is false, radar measurements will be ignored (except during init)
     use_radar_ = true ;
@@ -23,13 +23,13 @@ UKF::UKF() {
     x_ = VectorXd( 5 );
 
     // initial covariance matrix
-    P_ = MatrixXd( 5, 5 );
+    P_ = MatrixXd( 5 , 5 );
 
     // Process noise standard deviation longitudinal acceleration in m/s^2
-    std_a_ = 3.0  ;// 30;
+    std_a_ = 2.2;// 30;
 
     // Process noise standard deviation yaw acceleration in rad/s^2
-    std_yawdd_ = 0.3 ;//30;
+    std_yawdd_ = 0.3333 ;//30;
 
     //DO NOT MODIFY measurement noise values below these are provided by the sensor manufacturer.
     // Laser measurement noise standard deviation position1 in m
@@ -70,8 +70,6 @@ UKF::UKF() {
         weights_(i) = 0.5 / ( lambda_ + n_aug_ ) ;
     }
 
-    std::cout << "w" << weights_ << std::endl ;
-
     // precomputed noise matricies - fixed
     Q_ = MatrixXd( 2, 2 ) ;
     Q_ << ( std_a_ * std_a_ ) , 0 , 0 , ( std_yawdd_ * std_yawdd_ ) ;
@@ -81,6 +79,10 @@ UKF::UKF() {
              0, std_radphi_*std_radphi_, 0,
              0, 0, std_radrd_*std_radrd_;
 
+
+    R_lidar_ = MatrixXd( 2 , 2 ) ;
+    R_lidar_ << std_laspx_*std_laspx_ , 0 ,
+                0 , std_laspy_*std_laspy_ ;
 }
 
 UKF::~UKF() {}
@@ -106,7 +108,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
         //
 
-        P_ = P_ * 0.15 ;
+        P_ = P_ * 0.30 ;
 
         x_.fill( 0.0 ) ;
 
@@ -115,21 +117,18 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 			// get radar measurements
 			double rho   = meas_package.raw_measurements_(0) ;
 			double phi   = meas_package.raw_measurements_(1) ;
-			x_ << rho*cos(phi), rho*sin(phi), 0.5, 0.5, 0.5 ;
+			x_ << rho*cos(phi), rho*sin(phi), 0.20, 0.5, 0.1 ;
 
 		} else if (  meas_package.sensor_type_ == MeasurementPackage::LASER ) {
 
 			double px   = meas_package.raw_measurements_(0) ;
 			double py   = meas_package.raw_measurements_(1) ;
 			// we can only know (px,py) from first measurement.
-			x_ << px, py, 0.5 , 0.5 , 0.5 ;
+			x_ << px, py, 0.20 , 0.5 , 0.1 ;
 		}
 		else
 		   return ; //  unknown measurement type
 
-
-
-		std::cout << "[0]:" << x_.transpose() << std::endl ;
 		// save this time step .
 		time_us_ = meas_package.timestamp_ ;
 		is_initialized_ = true ;
@@ -144,23 +143,19 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
 	if ( use_radar_ && meas_package.sensor_type_ == MeasurementPackage::RADAR )
 		UpdateRadar( meas_package ) ;
-	/*
 	else if ( use_laser_ && meas_package.sensor_type_ == MeasurementPackage::LASER  )
 		UpdateLidar( meas_package ) ;
-*/
+
 }
 
 
 static void  FIX_ANGLE( double &a ) {
-/*
+
 	while ( a > M_PI )
 		a -= M_PI*2.0 ;
 
     while ( a < -M_PI )
         a += M_PI*2.0 ;
-        */
-
-    a = atan2( sin(a) , cos(a) ) ;
 
 }
 
@@ -277,7 +272,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
     position. Modify the state vector, x_, and covariance, P_.
 	You'll also need to calculate the lidar NIS.
 	**/
-/*
+
 	MatrixXd Zsig = MatrixXd( 2 , 2 * n_aug_ + 1  )   ;
 
 	VectorXd z_pred = VectorXd( 2 ) ;
@@ -287,63 +282,46 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 		// convert to radar space using these 4
 		double px  = Xsig_pred_( 0, i ) ;
 		double py  = Xsig_pred_( 1, i ) ;
-		double v   = Xsig_pred_( 2, i ) ;
-		double yaw = Xsig_pred_( 3, i ) ;
-
-		//
-		double rho = sqrt( px*px + py*py);
-
-		Zsig( 0, i ) = rho              ;
-		Zsig( 1, i ) = atan2(py,px)     ;
-		Zsig( 2, i ) = ( px * cos(yaw) * v  + py * sin(yaw) * v ) / rho ;
-
+		Zsig( 0, i ) = px    ;
+		Zsig( 1, i ) = py    ;
 		z_pred += weights_(i) * Zsig.col(i) ;
-
     }
 
 
-    MatrixXd S  = MatrixXd( 3 , 3 ) ;
+    MatrixXd S  = MatrixXd( 2 , 2 ) ;
     S.fill(0.0) ;
-    MatrixXd Tc = MatrixXd( n_x_ , 3 ) ;
+    MatrixXd Tc = MatrixXd( n_x_ , 2 ) ;
     Tc.fill(0.0) ;
 
 
     for ( int i=0; i<2*n_aug_+1; i++) {
 
         VectorXd zd = Zsig.col(i) - z_pred  ;
-        FIX_ANGLE(zd(1)) ;
-
         S =  S + weights_(i) * zd * zd.transpose() ;
 
         VectorXd xd = Xsig_pred_.col(i) - x_ ;
-		FIX_ANGLE(xd(3)) ;
-
         Tc = Tc + weights_(i) * xd * zd.transpose() ;
 
     }
 
     // we should put this in constructor - as constant
 
-    S = S + R_radar_ ;
+    S = S + R_lidar_ ;
 
     // Kalman gain
     MatrixXd K = Tc * S.inverse();
 
     // get radar measurement
-    VectorXd z = VectorXd( 3 ) ;
+    VectorXd z = VectorXd( 2 ) ;
 
     z << meas_package.raw_measurements_[0] ,
-         meas_package.raw_measurements_[1] ,
-         meas_package.raw_measurements_[2] ;
-
+         meas_package.raw_measurements_[1] ;
 
     VectorXd z_res = z - z_pred ;
 
-    FIX_ANGLE( z_res(1) ) ;
-
     x_ = x_ +  K * z_res ;
     P_ = P_ - K * S * K.transpose() ;
-  */
+
 
 
 }
@@ -369,10 +347,18 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
         //
         double rho = sqrt( px*px + py*py);
 
+        if ( rho < 1e-6 )
+        {
+         Zsig( 0 , i ) = 1e-6 ;
+         Zsig( 1 , i ) = atan2( py , px ) ;
+         Zsig( 2 , i ) = 0.0 ;
+        }
+        else
+        {
         Zsig( 0, i ) = rho              ;
         Zsig( 1, i ) = atan2(py,px)     ;
         Zsig( 2, i ) = ( px * cos(yaw) * v  + py * sin(yaw) * v ) / rho ;
-
+        }
         z_pred += weights_(i) * Zsig.col(i) ;
 
     }

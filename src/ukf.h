@@ -72,7 +72,7 @@ public:
   //
   MatrixXd Q_  ;
 
-  MatrixXd R_radar_ ;
+  MatrixXd R_radar_ , R_lidar_ ;
 
 
   /**
