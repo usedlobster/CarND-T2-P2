@@ -1,9 +1,9 @@
-# Extended Kalman Filter Project
+# Unscented Kalman Filter Project
 ### Self-Driving Car Engineer Nanodegree Program
 # ![image1](image00001.png)
 #
 
-In this project we utilize an Unscented Kalman filter to estimate the state of a moving object of interest with noisy lidar and radar measurements. 
+In this project we utilize an Unscented Kalman filter to estimate the state of a moving object of interest with noisy lidar and radar measurements - using a CTRV model.
 
 This project involves the Term 2 Simulator which can be downloaded [here](https://github.com/udacity/self-driving-car-sim/releases)
 
@@ -29,7 +29,7 @@ This project requires uWebSocketIO library. Once the install for uWebSocketIO is
   * Linux: gcc / g++ is installed by default on most Linux distros
   * Mac: same deal as make - [install Xcode command line tools](https://developer.apple.com/xcode/features/)
   * Windows: recommend using [MinGW](http://www.mingw.org/)
-
+f
 
 ## Results
 # 
